@@ -2,69 +2,125 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Мой облачный проект</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BaaS Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; padding: 50px; background-color: #f4f4f9; }
-        .form-container { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 300px; }
-        input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background: #f4b400; border: none; color: white; font-weight: bold; cursor: pointer; border-radius: 5px; }
-        button:hover { background: #dfa400; }
+        body { font-family: 'Inter', sans-serif; background: #f4f7f6; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .container { width: 100%; max-width: 500px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button#mainBtn { background: #007bff; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; font-weight: 600; cursor: pointer; transition: 0.3s; }
+        button#mainBtn:disabled { background: #ccc; }
+        #feed { width: 100%; max-width: 500px; }
+        .post { background: #fff; border: 1px solid #eaeaea; padding: 15px; margin-top: 15px; border-radius: 8px; position: relative; }
+        .like-btn { cursor: pointer; border: none; background: #f8f9fa; padding: 5px 12px; border-radius: 20px; font-size: 14px; transition: 0.2s; margin-top: 10px; }
+        .like-btn:hover { background: #e2e6ea; }
+        .time { font-size: 11px; color: #999; float: right; }
     </style>
 </head>
 <body>
 
-<div class="form-container">
-    <h3>Отправить заявку</h3>
-    <form id="feedbackForm">
-        <input type="text" id="userName" placeholder="Ваше имя" required>
-        <input type="email" id="userEmail" placeholder="Ваш Email" required>
-        <button type="submit">Отправить в облако</button>
-    </form>
-</div>
+    <div class="container">
+        <h3>Панель управления данными</h3>
+        <input type="text" id="name" placeholder="Имя профиля">
+        <input type="email" id="email" placeholder="Рабочий Email">
+        <button id="mainBtn">Опубликовать в облако</button>
+    </div>
 
-<script type="module">
-    // Импортируем модули Firebase
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+    <div id="feed"></div>
 
-    // ТВОИ КЛЮЧИ СО СКРИНШОТА
-    const firebaseConfig = {
-    apiKey: "AIzaSyCSekS7uCTI8AHqHpXCVx0LjXmpK9Tvc14",
-    authDomain: "adbi090.firebaseapp.com",
-    projectId: "adbi090",
-    storageBucket: "adbi090.firebasestorage.app",
-    messagingSenderId: "456726523992",
-    appId: "1:456726523992:web:7906d0537c8514bfe65a2d",
-    measurementId: "G-N1PW9NNSPP"
-  };
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { 
+            getFirestore, collection, addDoc, query, orderBy, onSnapshot, 
+            serverTimestamp, updateDoc, doc, increment 
+        } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // Инициализация
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+        const firebaseConfig = {
+            apiKey: "AIzaSyDgUxR0Txafc_qA-rpdSzKn33265IfxsHU",
+            authDomain: "qazaq-a072e.firebaseapp.com",
+            projectId: "qazaq-a072e",
+            storageBucket: "qazaq-a072e.firebasestorage.app",
+            messagingSenderId: "47025480090",
+            appId: "1:47025480090:web:3dd74ff29bc0c149f39a23",
+            measurementId: "G-9TE97NWMB9"
+        };
 
-    // Логика кнопки
-    document.getElementById("feedbackForm").addEventListener("submit", async (e) => {
-        e.preventDefault();
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
-        const nameInput = document.getElementById("userName").value;
-        const emailInput = document.getElementById("userEmail").value;
+        // --- ЭЛЕМЕНТЫ DOM ---
+        const feedContainer = document.getElementById('feed');
+        const mainBtn = document.getElementById('mainBtn');
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
 
-        try {
-            // Запись в коллекцию "requests"
-            await addDoc(collection(db, "requests"), {
-                name: nameInput,
-                email: emailInput,
-                timestamp: new Date() // добавил метку времени для удобства
+        // --- МЕТОДЫ ---
+
+        // Глобальная функция для лайков
+        window.processLike = async (id) => {
+            try {
+                const docRef = doc(db, "requests", id);
+                await updateDoc(docRef, { likes: increment(1) });
+            } catch (e) {
+                console.error("Ошибка при лайке:", e.message);
+            }
+        };
+
+        // Создание записи
+        mainBtn.onclick = async () => {
+            const name = nameInput.value.trim();
+            const email = emailInput.value.trim();
+
+            if (!name || !email) return alert("Заполните все поля");
+
+            mainBtn.disabled = true;
+            try {
+                await addDoc(collection(db, "requests"), {
+                    name,
+                    email,
+                    likes: 0,
+                    timestamp: serverTimestamp()
+                });
+                nameInput.value = "";
+                emailInput.value = "";
+            } catch (e) {
+                alert("Ошибка безопасности: Данные отклонены сервером.");
+                console.error(e);
+            } finally {
+                mainBtn.disabled = false;
+            }
+        };
+
+        // Реал-тайм обновление ленты
+        const q = query(collection(db, "requests"), orderBy("timestamp", "desc"));
+        
+        onSnapshot(q, (snapshot) => {
+            feedContainer.innerHTML = ""; // Очистка
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const date = data.timestamp ? data.timestamp.toDate().toLocaleString() : '...';
+                
+                const postElement = document.createElement('div');
+                postElement.className = 'post';
+                postElement.innerHTML = `
+                    <span class="time">${date}</span>
+                    <b>${escapeHtml(data.name)}</b>
+                    <p style="margin: 5px 0;">${escapeHtml(data.email)}</p>
+                    <button class="like-btn" onclick="processLike('${doc.id}')">
+                        👍 ${data.likes || 0}
+                    </button>
+                `;
+                feedContainer.appendChild(postElement);
             });
-            
-            alert("Данные успешно отправлены!");
-            document.getElementById("feedbackForm").reset();
-        } catch (error) {
-            console.error("Ошибка при добавлении документа: ", error);
-            alert("Ошибка при отправке.");
-        }
-    });
-</script>
+        });
 
+        // Вспомогательная функция для защиты от XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
 </body>
 </html>
