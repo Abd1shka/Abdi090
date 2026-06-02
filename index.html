@@ -16,19 +16,19 @@
         <p class="text-gray-600 mb-4">Вы зашли как: <span id="current-user" class="font-semibold text-gray-800">Загрузка...</span></p>
         
         <div class="grid grid-cols-2 gap-3">
-            <button onclick="changeStatus('📚 Учусь', '#1e9242')" 
+            <button onclick="changeStatus('📚 Учусь')" 
                     class="bg-[#1e9242] hover:opacity-90 text-white font-medium py-3 px-4 rounded-xl shadow-sm border border-black/10 cursor-pointer transition">
                  📚 Учусь
             </button>
-            <button onclick="changeStatus('☕ Кофе-брейк', '#ffcc00')" 
+            <button onclick="changeStatus('☕ Кофе-брейк')" 
                     class="bg-[#ffcc00] hover:opacity-90 text-black font-medium py-3 px-4 rounded-xl shadow-sm border border-black/10 cursor-pointer transition">
                  ☕ Кофе
             </button>
-            <button onclick="changeStatus('🎮 В игре', '#179cb3')" 
+            <button onclick="changeStatus('🎮 В игре')" 
                     class="bg-[#179cb3] hover:opacity-90 text-white font-medium py-3 px-4 rounded-xl shadow-sm border border-black/10 cursor-pointer transition">
                  🎮 В игре
             </button>
-            <button onclick="changeStatus('🏠 Дома', '#64748b')" 
+            <button onclick="changeStatus('🏠 Дома')" 
                     class="bg-[#64748b] hover:opacity-90 text-white font-medium py-3 px-4 rounded-xl shadow-sm border border-black/10 cursor-pointer transition">
                  🏠 Дома
             </button>
@@ -46,23 +46,33 @@
     <script type="module">
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-        // Твои личные данные подключения сохранены:
-        const URL = 'https://drgvmutfbgiaxzwsydjp.supabase.co/rest/v1/';
+        // ИСПРАВЛЕНО: Чистый адрес проекта без путей rest/v1/
+        const URL = 'https://drgvmutfbgiaxzwsydjp.supabase.co';
         const KEY = 'sb_publishable_6LrjdAtzkINc2f3OBrmHiA_ML5RRNkx'; 
         const supabase = createClient(URL, KEY);
 
-        // Твой персональный ID из таблицы Roman сохранен:
+        // Ваш персональный ID сохранен:
         const MY_ID = 'c91723ee-846a-459b-9dcf-79f81fdaded6'; 
 
+        // Функция автоматического подбора цвета по тексту (чтобы не ломать базу данных колонкой color)
+        function getColorByStatus(status) {
+            if (!status) return '#ccc';
+            if (status.includes('Учусь')) return '#1e9242';
+            if (status.includes('Кофе')) return '#ffcc00';
+            if (status.includes('игры') || status.includes('игре')) return '#179cb3';
+            if (status.includes('Дома')) return '#64748b';
+            return '#ccc';
+        }
+
         // Функция изменения статуса
-        window.changeStatus = async (text, color) => {
+        window.changeStatus = async (text) => {
             const { error } = await supabase
-                .from('Roman') // Имя твоей таблицы из Supabase
-                .update({ status: text, color: color })
+                .from('profiles') // ИСПРАВЛЕНО: Таблица profiles согласно методичке
+                .update({ status: text }) // ИСПРАВЛЕНО: Убрано поле color
                 .eq('id', MY_ID);
 
             if (error) {
-                alert("Ошибка! Проверьте RLS политики в Supabase.");
+                alert("Ошибка! Проверьте, включены ли RLS политики UPDATE в Supabase.");
                 console.error(error);
             } else {
                 fetchGroup(); 
@@ -72,13 +82,13 @@
         // Функция получения данных всех участников
         async function fetchGroup() {
             const { data, error } = await supabase
-                .from('Roman') // Имя твоей таблицы из Supabase
+                .from('profiles') // ИСПРАВЛЕНО: Таблица profiles согласно методичке
                 .select('*')
                 .order('username', { ascending: true });
 
             if (error) {
                 console.error("Ошибка получения данных:", error);
-                document.getElementById('group-container').innerHTML = '<p class="text-red-500 text-sm">Ошибка загрузки. Проверьте RLS.</p>';
+                document.getElementById('group-container').innerHTML = '<p class="text-red-500 text-sm">Ошибка загрузки. Проверьте RLS политики таблицы profiles.</p>';
                 return;
             }
 
@@ -96,9 +106,11 @@
                 const userRow = document.createElement('div');
                 userRow.className = "flex items-start space-x-3 pt-2 pb-2 border-b border-gray-100 last:border-0";
                 
-                // ИСПРАВЛЕНО: Добавлены косые кавычки (``) для корректной вставки HTML-строки в JS
+                // Рассчитываем цвет точки программно
+                const dotColor = getColorByStatus(profile.status);
+
                 userRow.innerHTML = `
-                    <span class="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" style="background-color: ${profile.color || '#ccc'}"></span>
+                    <span class="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" style="background-color: ${dotColor}"></span>
                     <div>
                         <div class="font-bold text-gray-950 text-base leading-tight">${profile.username || "Без имени"}</div>
                         <div class="text-sm text-gray-500 mt-0.5">${profile.status || 'Нет статуса'}</div>
@@ -107,9 +119,8 @@
                 container.appendChild(userRow);
             });
 
-            // Проверка на случай, если запись с вашим MY_ID была удалена из таблицы Roman
             if (!meFound) {
-                document.getElementById('current-user').innerHTML = '<span class="text-red-500 font-bold">ID не найден в таблице Roman!</span>';
+                document.getElementById('current-user').innerHTML = '<span class="text-red-500 font-bold">Ваш ID не найден в таблице profiles!</span>';
             }
         }
 
